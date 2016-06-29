@@ -41,6 +41,28 @@ object CookiesSpec extends Specification {
     }
   }
 
+  "ServerDecoder" should {
+    val strictDecoder = play.core.netty.utils.ServerCookieDecoder.STRICT
+    val strictDecoderRFC2965 = play.core.netty.utils.ServerCookieDecoder.STRICT_RFC2965
+
+    val laxDecoder = play.core.netty.utils.ServerCookieDecoder.LAX
+    val laxDecoderRFC2965 = play.core.netty.utils.ServerCookieDecoder.LAX_RFC2965
+
+    "when no force RFC2965, throw Exception when decoding cookies which doesn't include $VERSION" in {
+      strictDecoder.decode("TestField=\"test-test-test\";$Path=\"/\";$Domain=\".nicovideo.jp\"") must throwA[IllegalArgumentException]
+      laxDecoder.decode("TestField=\"test-test-test\";$Path=\"/\";$Domain=\".nicovideo.jp\"") must throwA[IllegalArgumentException]
+    }
+
+    "when force RFC2965, decode cookies which doesn't include $VERSION" in {
+      val resStrict = strictDecoderRFC2965.decode("TestField=\"test-test-test\";$Path=\"/\";$Domain=\".nicovideo.jp\"")
+      val resLax = laxDecoderRFC2965.decode("TestField=\"test-test-test\";$Path=\"/\";$Domain=\".nicovideo.jp\"")
+
+      resStrict must beEqualTo(resLax)
+      resStrict.size() must be_==(1)
+      resStrict.contains(new play.core.netty.utils.DefaultCookie("TestField", "test-test-test"))
+    }
+  }
+
   "trait Cookies#get" should {
     val originalCookie = Cookie(name = "cookie", value = "value")
     def headerString = Cookies.encodeCookieHeader(Seq(originalCookie))

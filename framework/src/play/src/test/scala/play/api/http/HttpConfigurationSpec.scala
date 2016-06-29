@@ -22,6 +22,7 @@ object HttpConfigurationSpec extends Specification {
         "play.http.actionComposition.controllerAnnotationsFirst" -> "true",
         "play.http.actionComposition.executeActionCreatorActionFirst" -> "true",
         "play.http.cookies.strict" -> "true",
+        "play.http.cookies.forceRfc2965Style" -> "false",
         "play.http.session.cookieName" -> "PLAY_SESSION",
         "play.http.session.secure" -> "true",
         "play.http.session.maxAge" -> "10s",
@@ -59,6 +60,11 @@ object HttpConfigurationSpec extends Specification {
     "configure cookies encoder/decoder" in {
       val httpConfiguration = new HttpConfiguration.HttpConfigurationProvider(configuration).get
       httpConfiguration.cookies.strict must beTrue
+    }
+
+    "configure cookie decoding RFC" in {
+      val httpConfiguration = new HttpConfiguration.HttpConfigurationProvider(configuration).get
+      httpConfiguration.cookies.forceRfc2965Style must beFalse
     }
 
     "configure session should set" in {
@@ -125,7 +131,7 @@ object HttpConfigurationSpec extends Specification {
 
     "be configured as strict" in {
 
-      val cookieConfiguration = CookiesConfiguration(strict = true)
+      val cookieConfiguration = CookiesConfiguration(strict = true, forceRfc2965Style = false)
 
       "for server encoder" in {
         cookieConfiguration.serverEncoder must beEqualTo(ServerCookieEncoder.STRICT)
@@ -146,7 +152,7 @@ object HttpConfigurationSpec extends Specification {
 
     "be configured as lax" in {
 
-      val cookieConfiguration = CookiesConfiguration(strict = false)
+      val cookieConfiguration = CookiesConfiguration(strict = false, forceRfc2965Style = false)
 
       "for server encoder" in {
         cookieConfiguration.serverEncoder must beEqualTo(ServerCookieEncoder.LAX)
@@ -162,6 +168,18 @@ object HttpConfigurationSpec extends Specification {
 
       "for client decoder" in {
         cookieConfiguration.clientDecoder must beEqualTo(ClientCookieDecoder.LAX)
+      }
+    }
+
+    "be configured as lax_rfc2625" in {
+      "for strict server decoder" in {
+        val cookieConfiguration = CookiesConfiguration(strict = true, forceRfc2965Style = true)
+        cookieConfiguration.serverDecoder must beEqualTo(ServerCookieDecoder.STRICT_RFC2965)
+      }
+
+      "for lax server decoder" in {
+        val cookieConfiguration = CookiesConfiguration(strict = false, forceRfc2965Style = true)
+        cookieConfiguration.serverDecoder must beEqualTo(ServerCookieDecoder.LAX_RFC2965)
       }
     }
   }

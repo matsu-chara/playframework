@@ -43,15 +43,29 @@ public final class ServerCookieDecoder extends CookieDecoder {
      * Strict encoder that validates that name and value chars are in the valid scope
      * defined in RFC6265
      */
-    public static final ServerCookieDecoder STRICT = new ServerCookieDecoder(true);
+    public static final ServerCookieDecoder STRICT = new ServerCookieDecoder(true, false);
+
+    /**
+     * Strict encoder that validates that name and value chars are in the valid scope
+     * defined in RFC6265 which decodes with RFC2965 style
+     */
+    public static final ServerCookieDecoder STRICT_RFC2965 = new ServerCookieDecoder(true, true);
 
     /**
      * Lax instance that doesn't validate name and value
      */
-    public static final ServerCookieDecoder LAX = new ServerCookieDecoder(false);
+    public static final ServerCookieDecoder LAX = new ServerCookieDecoder(false, false);
 
-    private ServerCookieDecoder(boolean strict) {
+    /**
+     * Lax instance that doesn't validate name and value which decodes with RFC2965 style
+     */
+    public static final ServerCookieDecoder LAX_RFC2965 = new ServerCookieDecoder(false, true);
+
+    private final boolean forceRfc2965Style;
+
+    private ServerCookieDecoder(boolean strict, boolean forceRfc2965Style) {
         super(strict);
+        this.forceRfc2965Style = forceRfc2965Style;
     }
 
     /**
@@ -73,8 +87,8 @@ public final class ServerCookieDecoder extends CookieDecoder {
 
         int i = 0;
 
-        boolean rfc2965Style = false;
-        if (header.regionMatches(true, 0, RFC2965_VERSION, 0, RFC2965_VERSION.length())) {
+        boolean rfc2965Style = forceRfc2965Style;
+        if (!forceRfc2965Style && header.regionMatches(true, 0, RFC2965_VERSION, 0, RFC2965_VERSION.length())) {
             // RFC 2965 style cookie, move to after version value
             i = header.indexOf(';') + 1;
             rfc2965Style = true;

@@ -34,7 +34,7 @@ case class HttpConfiguration(
  *               discarded if a single cookie is found to be invalid.
  */
 case class CookiesConfiguration(
-    strict: Boolean = true) {
+    strict: Boolean = true, forceRfc2965Style: Boolean = false) {
   def serverEncoder: ServerCookieEncoder = strict match {
     case true => ServerCookieEncoder.STRICT
     case false => ServerCookieEncoder.LAX
@@ -43,9 +43,11 @@ case class CookiesConfiguration(
     case true => ClientCookieEncoder.STRICT
     case false => ClientCookieEncoder.LAX
   }
-  def serverDecoder: ServerCookieDecoder = strict match {
-    case true => ServerCookieDecoder.STRICT
-    case false => ServerCookieDecoder.LAX
+  def serverDecoder: ServerCookieDecoder = (strict, forceRfc2965Style) match {
+    case (true, false) => ServerCookieDecoder.STRICT
+    case (true, true) => ServerCookieDecoder.STRICT_RFC2965
+    case (false, false) => ServerCookieDecoder.LAX
+    case (false, true) => ServerCookieDecoder.LAX_RFC2965
   }
   def clientDecoder: ClientCookieDecoder = strict match {
     case true => ClientCookieDecoder.STRICT
@@ -124,7 +126,8 @@ object HttpConfiguration {
         executeActionCreatorActionFirst = config.get[Boolean]("play.http.actionComposition.executeActionCreatorActionFirst")
       ),
       cookies = CookiesConfiguration(
-        strict = config.get[Boolean]("play.http.cookies.strict")
+        strict = config.get[Boolean]("play.http.cookies.strict"),
+        forceRfc2965Style = config.get[Boolean]("play.http.cookies.forceRfc2965Style")
       ),
       session = SessionConfiguration(
         cookieName = config.getDeprecated[String]("play.http.session.cookieName", "session.cookieName"),
