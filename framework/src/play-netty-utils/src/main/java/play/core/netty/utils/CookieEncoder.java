@@ -24,7 +24,7 @@ import static play.core.netty.utils.CookieUtil.unwrapValue;
  */
 abstract class CookieEncoder {
 
-    private final boolean strict;
+    protected final boolean strict;
 
     protected CookieEncoder(boolean strict) {
         this.strict = strict;

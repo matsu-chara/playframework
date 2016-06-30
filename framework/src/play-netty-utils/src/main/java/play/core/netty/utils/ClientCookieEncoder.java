@@ -17,11 +17,11 @@ package play.core.netty.utils;
 
 import static play.core.netty.utils.CookieUtil.*;
 
-import java.util.Iterator;
+import java.util.*;
 
 /**
- * A <a href="http://tools.ietf.org/html/rfc6265">RFC6265</a> compliant cookie encoder to be used client side,
- * so only name=value pairs are sent.
+ * A <a href="http://tools.ietf.org/html/rfc6265">RFC6265</a> compliant cookie encoder to be used client side, so
+ * only name=value pairs are sent.
  *
  * Note that multiple cookies are supposed to be sent at once in a single "Cookie" header.
  *
@@ -30,13 +30,14 @@ import java.util.Iterator;
 public final class ClientCookieEncoder extends CookieEncoder {
 
     /**
-     * Strict encoder that validates that name and value chars are in the valid scope
-     * defined in RFC6265
+     * Strict encoder that validates that name and value chars are in the valid scope and (for methods that accept
+     * multiple cookies) sorts cookies into order of decreasing path length, as specified in RFC6265.
      */
     public static final ClientCookieEncoder STRICT = new ClientCookieEncoder(true);
 
     /**
-     * Lax instance that doesn't validate name and value
+     * Lax instance that doesn't validate name and value, and (for methods that accept multiple cookies) keeps
+     * cookies in the order in which they were given.
      */
     public static final ClientCookieEncoder LAX = new ClientCookieEncoder(false);
 
@@ -47,8 +48,10 @@ public final class ClientCookieEncoder extends CookieEncoder {
     /**
      * Encodes the specified cookie into a Cookie header value.
      *
-     * @param name the cookie name
-     * @param value the cookie value
+     * @param name
+     *            the cookie name
+     * @param value
+     *            the cookie value
      * @return a Rfc6265 style Cookie header value
      */
     public String encode(String name, String value) {
@@ -58,7 +61,7 @@ public final class ClientCookieEncoder extends CookieEncoder {
     /**
      * Encodes the specified cookie into a Cookie header value.
      *
-     * @param cookie specified the cookie
+     * @param cookie the specified cookie
      * @return a Rfc6265 style Cookie header value
      */
     public String encode(Cookie cookie) {
@@ -71,9 +74,36 @@ public final class ClientCookieEncoder extends CookieEncoder {
     }
 
     /**
+     * Sort cookies into decreasing order of path length, breaking ties by sorting into increasing chronological
+     * order of creation time, as recommended by RFC 6265.
+     */
+    private static final Comparator<Cookie> COOKIE_COMPARATOR = new Comparator<Cookie>() {
+        @Override
+        public int compare(Cookie c1, Cookie c2) {
+            String path1 = c1.path();
+            String path2 = c2.path();
+            // Cookies with unspecified path default to the path of the request. We don't
+            // know the request path here, but we assume that the length of an unspecified
+            // path is longer than any specified path (i.e. pathless cookies come first),
+            // because setting cookies with a path longer than the request path is of
+            // limited use.
+            int len1 = path1 == null ? Integer.MAX_VALUE : path1.length();
+            int len2 = path2 == null ? Integer.MAX_VALUE : path2.length();
+            int diff = len2 - len1;
+            if (diff != 0) {
+                return diff;
+            }
+            // Rely on Java's sort stability to retain creation order in cases where
+            // cookies have same path length.
+            return -1;
+        }
+    };
+
+    /**
      * Encodes the specified cookies into a single Cookie header value.
      *
-     * @param cookies some cookies
+     * @param cookies
+     *            some cookies
      * @return a Rfc6265 style Cookie header value, null if no cookies are passed.
      */
     public String encode(Cookie... cookies) {
@@ -85,12 +115,54 @@ public final class ClientCookieEncoder extends CookieEncoder {
         }
 
         StringBuilder buf = new StringBuilder();
-        for (Cookie c : cookies) {
-            if (c == null) {
-                break;
+        if (strict) {
+            if (cookies.length == 1) {
+                encode(buf, cookies[0]);
+            } else {
+                Cookie[] cookiesSorted = Arrays.copyOf(cookies, cookies.length);
+                Arrays.sort(cookiesSorted, COOKIE_COMPARATOR);
+                for (Cookie c : cookiesSorted) {
+                    encode(buf, c);
+                }
             }
+        } else {
+            for (Cookie c : cookies) {
+                encode(buf, c);
+            }
+        }
+        return stripTrailingSeparatorOrNull(buf);
+    }
 
-            encode(buf, c);
+    /**
+     * Encodes the specified cookies into a single Cookie header value.
+     *
+     * @param cookies
+     *            some cookies
+     * @return a Rfc6265 style Cookie header value, null if no cookies are passed.
+     */
+    public String encode(Collection<? extends Cookie> cookies) {
+        if (cookies == null) {
+            throw new NullPointerException("cookies");
+        }
+        if (cookies.size() == 0) {
+            return null;
+        }
+
+        StringBuilder buf = new StringBuilder();
+        if (strict) {
+            if (cookies.size() == 1) {
+                encode(buf, cookies.iterator().next());
+            } else {
+                Cookie[] cookiesSorted = cookies.toArray(new Cookie[cookies.size()]);
+                Arrays.sort(cookiesSorted, COOKIE_COMPARATOR);
+                for (Cookie c : cookiesSorted) {
+                    encode(buf, c);
+                }
+            }
+        } else {
+            for (Cookie c : cookies) {
+                encode(buf, c);
+            }
         }
         return stripTrailingSeparatorOrNull(buf);
     }
@@ -105,19 +177,33 @@ public final class ClientCookieEncoder extends CookieEncoder {
         if (cookies == null) {
             throw new NullPointerException("cookies");
         }
+
         Iterator<? extends Cookie> cookiesIt = cookies.iterator();
         if (!cookiesIt.hasNext()) {
             return null;
         }
 
         StringBuilder buf = new StringBuilder();
-        while (cookiesIt.hasNext()) {
-            Cookie c = cookiesIt.next();
-            if (c == null) {
-                break;
+        if (strict) {
+            Cookie firstCookie = cookiesIt.next();
+            if (!cookiesIt.hasNext()) {
+                encode(buf, firstCookie);
+            } else {
+                List<Cookie> cookiesList = new ArrayList<>();
+                cookiesList.add(firstCookie);
+                while (cookiesIt.hasNext()) {
+                    cookiesList.add(cookiesIt.next());
+                }
+                Cookie[] cookiesSorted = cookiesList.toArray(new Cookie[cookiesList.size()]);
+                Arrays.sort(cookiesSorted, COOKIE_COMPARATOR);
+                for (Cookie c : cookiesSorted) {
+                    encode(buf, c);
+                }
             }
-
-            encode(buf, c);
+        } else {
+            while (cookiesIt.hasNext()) {
+                encode(buf, cookiesIt.next());
+            }
         }
         return stripTrailingSeparatorOrNull(buf);
     }
